@@ -1,0 +1,142 @@
+---
+title: "Reproducible Research Project 2"
+output: html_document
+---
+
+# Effect of Weather Events on Personal Health and Property Damage, 1950-2011
+
+## Synopsis
+
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+## Data Processing
+
+### Loading and preprocessing the data
+
+For the first knitting, read the original file repdata_data_StormData.csv.  Create a dataframe with just the columns needed for this analysis and write it out to StormData.csv.  Future knittings will check for this file and read it instead of the original.  This saves a great deal of time during development because the original file takes a long time to load.  Also, it can be convenient to have all of the required data in a smaller file.
+
+```{r}
+if(!file.exists("StormData.csv")){
+    data0 <- read.csv("repdata_data_StormData.csv")
+    str(data0)
+    data <- data0[c("EVTYPE","FATALITIES","INJURIES","PROPDMG","PROPDMGEXP","CROPDMG","CROPDMGEXP")]
+    write.csv(data, "StormData.csv")
+}else{
+    data <- read.csv("StormData.csv")
+}
+```
+
+### Explore the data
+
+Look at the data with the str commmand and output all unique values of PROPDMGEXP and CROPDMGEXP.
+
+```{r}
+str(data)
+unique(data$PROPDMGEXP)
+unique(data$CROPDMGEXP)
+```
+
+### Look at 30 most common events
+
+```{r}
+evcount <- aggregate(data$EVTYPE, by=list(data$EVTYPE), FUN=length)
+print(evcount[order(-evcount$x),][1:30,])
+```
+
+### Use PROPDMG and PROPDMGEXP to create PROPVALUE
+
+Create multiplier PROPMULT for all unique values of PROPDMGEXP to adjust PROPDMG
+
+```{r}
+data$PROPMULT <- 1
+data$PROPMULT[data$PROPDMGEXP == "K"] <- 1000
+data$PROPMULT[data$PROPDMGEXP == "M"] <- 1e+06
+data$PROPMULT[data$PROPDMGEXP == ""]  <- 1
+data$PROPMULT[data$PROPDMGEXP == "B"] <- 1e+09
+data$PROPMULT[data$PROPDMGEXP == "m"] <- 1e+06
+data$PROPMULT[data$PROPDMGEXP == "+"] <- 1
+data$PROPMULT[data$PROPDMGEXP == "0"] <- 1
+data$PROPMULT[data$PROPDMGEXP == "5"] <- 1e+05
+data$PROPMULT[data$PROPDMGEXP == "6"] <- 1e+06
+data$PROPMULT[data$PROPDMGEXP == "?"] <- 0
+data$PROPMULT[data$PROPDMGEXP == "4"] <- 10000
+data$PROPMULT[data$PROPDMGEXP == "2"] <- 100
+data$PROPMULT[data$PROPDMGEXP == "3"] <- 1000
+data$PROPMULT[data$PROPDMGEXP == "h"] <- 100
+data$PROPMULT[data$PROPDMGEXP == "7"] <- 1e+07
+data$PROPMULT[data$PROPDMGEXP == "H"] <- 100
+data$PROPMULT[data$PROPDMGEXP == "-"] <- 0
+data$PROPMULT[data$PROPDMGEXP == "1"] <- 10
+data$PROPMULT[data$PROPDMGEXP == "8"] <- 1e+08
+
+data$PROPVALUE <- data$PROPDMG * data$PROPMULT
+```
+
+### Use CROPDMG and CROPDMGEXP to create CROPVALUE
+
+Create multiplier PROPMULT for all unique values of PROPDMGEXP to adjust PROPDMG
+
+```{r}
+data$CROPMULT <- 1
+data$CROPMULT[data$CROPDMGEXP == "M"] <- 1e+06
+data$CROPMULT[data$CROPDMGEXP == "K"] <- 1000
+data$CROPMULT[data$CROPDMGEXP == "m"] <- 1e+06
+data$CROPMULT[data$CROPDMGEXP == "B"] <- 1e+09
+data$CROPMULT[data$CROPDMGEXP == "?"] <- 0
+data$CROPMULT[data$CROPDMGEXP == "0"] <- 1
+data$CROPMULT[data$CROPDMGEXP == "k"] <- 1000
+data$CROPMULT[data$CROPDMGEXP == "2"] <- 100
+data$CROPMULT[data$CROPDMGEXP == ""] <- 1
+
+data$CROPVALUE <- data$CROPDMG * data$CROPMULT
+```
+### Aggregate data by event
+
+```{r}
+fatal <- aggregate(FATALITIES ~ EVTYPE, data, FUN = sum)
+injury <- aggregate(INJURIES ~ EVTYPE, data, FUN = sum)
+propdmg <- aggregate(PROPVALUE ~ EVTYPE, data, FUN = sum)
+cropdmg <- aggregate(CROPVALUE ~ EVTYPE, data, FUN = sum)
+```
+
+### Plot events with ten highest fatality and ten highest injury counts
+
+As can be seen, tornados have resulted in the highest total fatalities and injury.  It would be useful to do some additional cleaning of the data should be done to combine related events.  For example, EXCESSIVE HEAT and HEAT are essentially the same, especially when they result in fatalities.
+
+```{r}
+fatal <- fatal[order(-fatal$FATALITIES),][1:10,]
+injury <- injury[order(-injury$INJURIES),][1:10,]
+par(mfrow = c(1, 2), mar = c(12, 4, 3, 2), mgp = c(3, 1, 0), cex = 0.7)
+barplot(fatal$FATALITIES, las = 3, names.arg = fatal$EVTYPE, main = "Events with Highest Fatalities",
+        ylab = "Number of fatalities")
+barplot(injury$INJURIES, las = 3, names.arg = injury$EVTYPE, main = "Events with Highest Injuries", 
+        ylab = "Number of injuries")
+```
+
+### Plot events with ten highest damages in property and crop damage
+
+As can be seen, flooding appears to have caused the highest property damage and drought has caused the highest crop damage.  As before, it would be useful to combine similar events.
+
+```{r}
+propdmg <- propdmg[order(-propdmg$PROPVALUE),][1:10,]
+cropdmg <- cropdmg[order(-cropdmg$CROPVALUE),][1:10,]
+par(mfrow = c(1, 2), mar = c(12, 4, 3, 2), mgp = c(3, 1, 0), cex = 0.7)
+barplot(propdmg$PROPVALUE/(10^9), las = 3, names.arg = propdmg$EVTYPE, 
+        main = "Events with Highest Property Damages", ylab = "Damage Cost (billions of dollars)")
+barplot(cropdmg$CROPVALUE/(10^9), las = 3, names.arg = cropdmg$EVTYPE, 
+        main = "Events With Highest Crop Damages", ylab = "Damage Cost (billions of dollars)")
+```
+
+### Results
+
+*Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?*
+
+TORNADO is most harmful.  EXCESSIVE HEAT is second for fatalities and TSTM WIND is second for injuries
+
+*Across the United States, which types of events have the greatest economic consequences?*
+
+FLOOD followed by HURRICANE/TYPHOON is highest for Property Damage and DROUGHT followed by FLOOD is highest for crop damage.
+
+
